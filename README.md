@@ -9,6 +9,7 @@ A curated repository of standalone developer utilities, automation recipes, Mode
 | Trick / Utility | Category | Description | Technologies |
 | :--- | :--- | :--- | :--- |
 | [**`firefox-devtools-mcp-agy`**](./firefox-devtools-mcp-agy/) | MCP Integration / Automation | Bash installer to register Mozilla Firefox DevTools MCP server with Antigravity (`agy`) / Gemini CLI using `jq` to parse and safely merge configurations. | Bash, `jq`, Node.js, `npx`, Firefox |
+| [**`helium-profile-shortcuts-gnome`**](./helium-profile-shortcuts-gnome/) | Desktop Integration / Shortcuts | Script to create, list, and remove GNOME desktop launcher shortcuts for individual Helium browser profiles with custom HTML color code icons, dash pinning, and desktop support. | Bash, `jq`, Python 3, GNOME Shell, FreeDesktop |
 
 ---
 
@@ -16,12 +17,15 @@ A curated repository of standalone developer utilities, automation recipes, Mode
 
 ```text
 .
-├── AGENTS.md                   # Agent guidelines for adding and updating tricks
-├── LICENSE                     # MIT License
-├── README.md                   # Central index and directory of all tricks
-└── firefox-devtools-mcp-agy/   # Firefox DevTools MCP installer for Antigravity
-    ├── install.sh              # Executable installer and configurator
-    └── README.md               # Detailed documentation and usage instructions
+├── AGENTS.md                           # Agent guidelines for adding and updating tricks
+├── LICENSE                             # MIT License
+├── README.md                           # Central index and directory of all tricks
+├── firefox-devtools-mcp-agy/           # Firefox DevTools MCP installer for Antigravity
+│   ├── install.sh                      # Executable installer and configurator
+│   └── README.md                       # Detailed documentation and usage instructions
+└── helium-profile-shortcuts-gnome/     # GNOME shortcut manager for Helium profiles
+    ├── manage-shortcuts.sh             # Executable shortcut manager
+    └── README.md                       # Detailed documentation and usage instructions
 ```
 
 ---
