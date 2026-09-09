@@ -237,13 +237,20 @@ sys.exit(1)
 " "$raw_color" 2>/dev/null || echo ""
 }
 
+# Prompt for shortcut title.
+# ALL prompts and UI are redirected to stderr (>&2) so that command substitution
+# captures only the sanitized title.
 prompt_title_selection() {
     local default_title="$1"
     local user_input=""
 
-    echo ""
-    echo -e "${BOLD}${CYAN}==>${NC} ${BOLD}Shortcut Title:${NC}"
+    echo "" >&2
+    echo -e "${BOLD}${CYAN}==>${NC} ${BOLD}Shortcut Title:${NC}" >&2
     read -r -p "Enter shortcut title [default: '${default_title}']: " user_input </dev/tty || user_input=""
+    
+    # Strip carriage returns, newlines, and trim leading/trailing whitespace
+    user_input=$(echo "$user_input" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    
     if [ -n "$user_input" ]; then
         echo "$user_input"
     else
@@ -251,30 +258,35 @@ prompt_title_selection() {
     fi
 }
 
+# Prompt for shortcut icon color.
+# ALL prompts and UI are redirected to stderr (>&2) so that command substitution
+# captures only the normalized hex code.
 prompt_color_selection() {
     local profile_display_name="$1"
 
-    echo ""
-    echo -e "${BOLD}${CYAN}==>${NC} ${BOLD}Select an icon color for profile '${profile_display_name}':${NC}"
+    echo "" >&2
+    echo -e "${BOLD}${CYAN}==>${NC} ${BOLD}Select an icon color for profile '${profile_display_name}':${NC}" >&2
     local idx=1
     for entry in "${SUGGESTED_COLORS[@]}"; do
         local name="${entry%%:*}"
         local hex="${entry##*:}"
         local swatch
         swatch=$(print_color_swatch "$hex")
-        printf "  %2d) %s  %-12s (%s)\n" "$idx" "$swatch" "$name" "$hex"
+        printf "  %2d) %s  %-12s (%s)\n" "$idx" "$swatch" "$name" "$hex" >&2
         idx=$((idx + 1))
     done
-    echo -e "   c)  Custom HTML / Hex color code (e.g. #FF5733, teal, #8A2BE2)"
-    echo ""
+    echo -e "   c)  Custom HTML / Hex color code (e.g. #FF5733, teal, #8A2BE2)" >&2
+    echo "" >&2
 
     local choice=""
     while true; do
         read -r -p "Choose a color [1-10, c, or #hex] (default: 1): " choice </dev/tty || choice=""
+        choice=$(echo "$choice" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
         choice="${choice:-1}"
 
         if [[ "$choice" =~ ^[cC]([uU][sS][tT][oO][mM])?$ ]]; then
             read -r -p "Enter custom HTML/Hex color code (e.g. #FF5733): " custom_input </dev/tty || custom_input=""
+            custom_input=$(echo "$custom_input" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             local norm
             norm=$(normalize_color "$custom_input")
             if [ -n "$norm" ]; then
@@ -486,13 +498,44 @@ except Exception:
 " "$desktop_name" 2>/dev/null || true
 }
 
-refresh_desktop_database() {
+# Thoroughly refresh desktop launcher and icon caches across FreeDesktop and GNOME.
+refresh_caches() {
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "Dry-run: Would refresh desktop shortcut and icon caches."
+        return 0
+    fi
+
+    print_step "Updating desktop shortcut and icon caches..."
+
+    # 1. Update FreeDesktop application database
     if command -v update-desktop-database &>/dev/null; then
         update-desktop-database "$APPS_DIR" 2>/dev/null || true
     fi
-    if command -v gtk-update-icon-cache &>/dev/null; then
-        gtk-update-icon-cache -f -t "${XDG_DATA_HOME}/icons/hicolor" 2>/dev/null || true
+
+    # 2. Force update XDG desktop menu
+    if command -v xdg-desktop-menu &>/dev/null; then
+        xdg-desktop-menu forceupdate 2>/dev/null || true
     fi
+
+    # 3. Update GTK3 and GTK4 icon caches
+    local hicolor_dir="${XDG_DATA_HOME}/icons/hicolor"
+    if [ -d "$hicolor_dir" ]; then
+        if command -v gtk-update-icon-cache &>/dev/null; then
+            gtk-update-icon-cache -f -t -q "$hicolor_dir" 2>/dev/null || true
+        fi
+        if command -v gtk4-update-icon-cache &>/dev/null; then
+            gtk4-update-icon-cache -f -t -q "$hicolor_dir" 2>/dev/null || true
+        fi
+        if command -v xdg-icon-resource &>/dev/null; then
+            xdg-icon-resource forceupdate 2>/dev/null || true
+        fi
+    fi
+
+    # 4. Touch directories to signal file system monitors (inotify / GNOME Shell)
+    touch "$APPS_DIR" 2>/dev/null || true
+    touch "${XDG_DATA_HOME}/icons/hicolor" 2>/dev/null || true
+
+    print_success "Desktop shortcut and icon caches updated successfully."
 }
 
 cmd_list() {
@@ -564,7 +607,11 @@ create_single_shortcut() {
     local pname="$2"
     local config_dir="$3"
     local selected_color="$4"
-    local final_name="$5"
+    local raw_name="$5"
+
+    # Strictly strip newlines, carriage returns, and extra whitespace from title
+    local final_name
+    final_name=$(echo "$raw_name" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 
     local slug
     slug=$(slugify "$pdir")
@@ -673,7 +720,7 @@ cmd_create() {
         if [ "$count" -eq 0 ]; then
             print_warn "No profiles found to create shortcuts for."
         else
-            refresh_desktop_database
+            refresh_caches
             print_success "Created shortcuts for $count profile(s)."
         fi
     else
@@ -711,7 +758,7 @@ cmd_create() {
         fi
 
         create_single_shortcut "$resolved_dir" "$resolved_name" "$config_dir" "$chosen_color" "$final_title"
-        refresh_desktop_database
+        refresh_caches
     fi
 }
 
@@ -777,7 +824,7 @@ cmd_remove() {
                 remove_single_shortcut "$pdir" "$pname"
             fi
         done < <(get_profiles "$config_dir")
-        refresh_desktop_database
+        refresh_caches
         print_success "Completed removing profile shortcuts and icons."
     else
         if [ -z "$target_profile" ]; then
@@ -788,7 +835,7 @@ cmd_remove() {
 
         IFS=$'\t' read -r resolved_dir resolved_name < <(resolve_profile "$target_profile" "$config_dir")
         remove_single_shortcut "$resolved_dir" "$resolved_name"
-        refresh_desktop_database
+        refresh_caches
     fi
 }
 
@@ -836,7 +883,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -t|--title|-n|--name)
-            CUSTOM_TITLE="$2"
+            CUSTOM_TITLE=$(echo "$2" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             shift 2
             ;;
         --title-format|--format)
