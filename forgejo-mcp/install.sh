@@ -216,7 +216,6 @@ download_binary() {
     mkdir -p "$BIN_DIR"
     local temp_dir
     temp_dir=$(mktemp -d "/tmp/forgejo-mcp.XXXXXX")
-    trap 'rm -rf "$temp_dir"' EXIT
 
     print_info "Fetching from: $download_url"
     local http_status
@@ -228,6 +227,7 @@ download_binary() {
             asset_name="fallback.tar.gz"
             print_success "Downloaded fallback release asset successfully."
         else
+            rm -rf "$temp_dir"
             print_error "Failed to download forgejo-mcp binary."
             exit 1
         fi
@@ -240,12 +240,14 @@ download_binary() {
     extracted_bin=$(find "$temp_dir" -type f -name "forgejo-mcp" -perm /111 -o -type f -name "forgejo-mcp" | head -n 1)
 
     if [ -z "$extracted_bin" ] || [ ! -f "$extracted_bin" ]; then
+        rm -rf "$temp_dir"
         print_error "Extracted archive did not contain 'forgejo-mcp' executable."
         exit 1
     fi
 
     cp "$extracted_bin" "${BIN_DIR}/forgejo-mcp"
     chmod +x "${BIN_DIR}/forgejo-mcp"
+    rm -rf "$temp_dir"
     BIN_PATH="${BIN_DIR}/forgejo-mcp"
     print_success "Installed binary to: $BIN_PATH"
 }
