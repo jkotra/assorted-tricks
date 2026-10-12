@@ -1,0 +1,10 @@
+# Logs
+*.log
+
+# Temporary and backup files
+*.tmp*
+*.bak*
+
+# OS artifacts
+.DS_Store
+Thumbs.db
